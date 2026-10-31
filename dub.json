@@ -1,0 +1,10 @@
+{
+	"description": "A high-performance DBC to C/C++/D code generator",
+	"authors": [
+		"Balázs Szakos"
+	],
+	"license": "MIT",
+	"name": "dbcc",
+	"targetType": "executable",
+	"sourcePaths": ["source"]
+}
