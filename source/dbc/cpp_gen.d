@@ -15,18 +15,27 @@ string generateCppHeader(Database db) {
     
     outBuffer.put("inline uint64_t extract_bits(const uint8_t* data, int start_bit, int length) {\n");
     outBuffer.put("    uint64_t payload = 0;\n");
-    outBuffer.put("    std::memcpy(&payload, data, 8); // Assuming 8-byte CAN frame\n");
+    outBuffer.put("    std::memcpy(&payload, data, 8);\n");
     outBuffer.put("    uint64_t mask = length == 64 ? ~0ULL : (1ULL << length) - 1;\n");
     outBuffer.put("    return (payload >> start_bit) & mask;\n");
     outBuffer.put("}\n\n");
-
+    
+    outBuffer.put("inline void insert_bits(uint8_t* data, uint64_t value, int start_bit, int length) {\n");
+    outBuffer.put("    uint64_t payload = 0;\n");
+    outBuffer.put("    std::memcpy(&payload, data, 8);\n");
+    outBuffer.put("    uint64_t mask = length == 64 ? ~0ULL : (1ULL << length) - 1;\n");
+    outBuffer.put("    payload &= ~(mask << start_bit);\n");
+    outBuffer.put("    payload |= (value & mask) << start_bit;\n");
+    outBuffer.put("    std::memcpy(data, &payload, 8);\n");
+    outBuffer.put("}\n\n");
+    
     foreach (msg; db.messages) {
         outBuffer.put(format("struct %s {\n", msg.name));
-
+        
         foreach (sig; msg.signals) {
             outBuffer.put(format("    double %s; // Unit: %s\n", sig.name, sig.unit));
         }
-
+        
         outBuffer.put("\n    void unpack(const uint8_t* data) {\n");
         foreach (sig; msg.signals) {
             outBuffer.put(format("        uint64_t raw_%s = extract_bits(data, %d, %d);\n", 
@@ -43,6 +52,22 @@ string generateCppHeader(Database db) {
             }
         }
         outBuffer.put("    }\n");
+        
+        outBuffer.put("\n    void pack(uint8_t* data) const {\n");
+        foreach (sig; msg.signals) {
+            if (sig.isSigned) {
+                outBuffer.put(format("        int64_t raw_%s = static_cast<int64_t>((this->%s - %f) / %f);\n", 
+                                     sig.name, sig.name, sig.offset, sig.factor));
+            } else {
+                 outBuffer.put(format("        uint64_t raw_%s = static_cast<uint64_t>((this->%s - %f) / %f);\n", 
+                                     sig.name, sig.name, sig.offset, sig.factor));
+            }
+
+            outBuffer.put(format("        insert_bits(data, raw_%s, %d, %d);\n", 
+                                 sig.name, sig.startBit, sig.length));
+        }
+        outBuffer.put("    }\n");
+        
         outBuffer.put("};\n\n");
     }
     
