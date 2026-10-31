@@ -11,7 +11,7 @@ string generateDModule(Database db) {
     outBuffer.put("import core.stdc.string : memcpy;\n\n");
     
     outBuffer.put("pragma(inline, true)\n");
-    outBuffer.put("ulong extractBits(const ubyte* data, int startBit, int length) @nogc pure nothrow {\n");
+    outBuffer.put("ulong extractBitsLittle(const ubyte* data, int startBit, int length) @nogc pure nothrow {\n");
     outBuffer.put("    ulong payload = 0;\n");
     outBuffer.put("    memcpy(&payload, data, 8);\n");
     outBuffer.put("    ulong mask = length == 64 ? ~0UL : (1UL << length) - 1;\n");
@@ -19,12 +19,46 @@ string generateDModule(Database db) {
     outBuffer.put("}\n\n");
     
     outBuffer.put("pragma(inline, true)\n");
-    outBuffer.put("void insertBits(ubyte* data, ulong value, int startBit, int length) @nogc pure nothrow {\n");
+    outBuffer.put("void insertBitsLittle(ubyte* data, ulong value, int startBit, int length) @nogc pure nothrow {\n");
     outBuffer.put("    ulong payload = 0;\n");
     outBuffer.put("    memcpy(&payload, data, 8);\n");
     outBuffer.put("    ulong mask = length == 64 ? ~0UL : (1UL << length) - 1;\n");
     outBuffer.put("    payload &= ~(mask << startBit);\n");
     outBuffer.put("    payload |= (value & mask) << startBit;\n");
+    outBuffer.put("    memcpy(data, &payload, 8);\n");
+    outBuffer.put("}\n\n");
+
+    outBuffer.put("pragma(inline, true)\n");
+    outBuffer.put("ulong extractBitsBig(const ubyte* data, int startBit, int length) @nogc pure nothrow {\n");
+    outBuffer.put("    ulong payload = 0;\n");
+    outBuffer.put("    // Copy data, then byte-swap for Big Endian processing\n");
+    outBuffer.put("    memcpy(&payload, data, 8);\n");
+    outBuffer.put("    import core.bitop : bswap;\n");
+    outBuffer.put("    payload = bswap(cast(uint)(payload >> 32)) | (cast(ulong)bswap(cast(uint)payload) << 32);\n");
+    outBuffer.put("    \n");
+    outBuffer.put("    ulong mask = length == 64 ? ~0UL : (1UL << length) - 1;\n");
+    outBuffer.put("    // In DBC Big Endian, startBit is the MSB in a saw-tooth pattern. We map it to LSB.\n");
+    outBuffer.put("    int bitIdx = (7 - (startBit / 8)) * 8 + (startBit % 8);\n");
+    outBuffer.put("    int shift = bitIdx - length + 1;\n");
+    outBuffer.put("    return (payload >> shift) & mask;\n");
+    outBuffer.put("}\n\n");
+
+    outBuffer.put("pragma(inline, true)\n");
+    outBuffer.put("void insertBitsBig(ubyte* data, ulong value, int startBit, int length) @nogc pure nothrow {\n");
+    outBuffer.put("    ulong payload = 0;\n");
+    outBuffer.put("    memcpy(&payload, data, 8);\n");
+    outBuffer.put("    import core.bitop : bswap;\n");
+    outBuffer.put("    payload = bswap(cast(uint)(payload >> 32)) | (cast(ulong)bswap(cast(uint)payload) << 32);\n");
+    outBuffer.put("    \n");
+    outBuffer.put("    ulong mask = length == 64 ? ~0UL : (1UL << length) - 1;\n");
+    outBuffer.put("    int bitIdx = (7 - (startBit / 8)) * 8 + (startBit % 8);\n");
+    outBuffer.put("    int shift = bitIdx - length + 1;\n");
+    outBuffer.put("    \n");
+    outBuffer.put("    payload &= ~(mask << shift);\n");
+    outBuffer.put("    payload |= (value & mask) << shift;\n");
+    outBuffer.put("    \n");
+    outBuffer.put("    // Byte-swap back before saving\n");
+    outBuffer.put("    payload = bswap(cast(uint)(payload >> 32)) | (cast(ulong)bswap(cast(uint)payload) << 32);\n");
     outBuffer.put("    memcpy(data, &payload, 8);\n");
     outBuffer.put("}\n\n");
     
@@ -37,8 +71,9 @@ string generateDModule(Database db) {
         
         outBuffer.put("\n    void unpack(const ubyte* data) @nogc pure nothrow {\n");
         foreach (sig; msg.signals) {
-            outBuffer.put(format("        ulong raw_%s = extractBits(data, %d, %d);\n", 
-                                 sig.name, sig.startBit, sig.length));
+            string func = sig.isLittleEndian ? "extractBitsLittle" : "extractBitsBig";
+            outBuffer.put(format("        ulong raw_%s = %s(data, %d, %d);\n", 
+                                 sig.name, func, sig.startBit, sig.length));
             
             if (sig.isSigned) {
                 outBuffer.put(format("        long signed_raw_%s = (raw_%s & (1UL << %d)) ? (raw_%s | ~((1UL << %d) - 1)) : raw_%s;\n",
@@ -62,8 +97,9 @@ string generateDModule(Database db) {
                                      sig.name, sig.name, sig.offset, sig.factor));
             }
             
-            outBuffer.put(format("        insertBits(data, raw_%s, %d, %d);\n", 
-                                 sig.name, sig.startBit, sig.length));
+            string func = sig.isLittleEndian ? "insertBitsLittle" : "insertBitsBig";
+            outBuffer.put(format("        %s(data, raw_%s, %d, %d);\n", 
+                                 func, sig.name, sig.startBit, sig.length));
         }
         outBuffer.put("    }\n");
         

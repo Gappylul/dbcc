@@ -1,11 +1,11 @@
 VERSION ""
 
-NS_ :
-        NS_DESC_
+NS_ : 
+	NS_DESC_
 
 BS_:
 
-BU_: EngineNode Dashboard
+BU_: EngineNode Dashboard BatteryNode
 
 BO_ 256 ENGINE_DATA: 8 EngineNode
  SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Dashboard
@@ -13,3 +13,6 @@ BO_ 256 ENGINE_DATA: 8 EngineNode
 
 BO_ 512 STEERING_DATA: 4 SteeringNode
  SG_ SteeringAngle : 0|12@0- (0.1,0) [-180|180] "deg" Dashboard
+
+BO_ 1024 BATTERY_DATA: 8 BatteryNode
+ SG_ BatteryVoltage : 7|16@0+ (0.01,0) [0|100] "V" Dashboard
