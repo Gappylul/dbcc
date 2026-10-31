@@ -2,14 +2,15 @@ import std.stdio;
 import std.file;
 import dbc.model;
 import dbc.parser;
+import dbc.cpp_gen;
 
 void main(string[] args) {
-	if (args.length < 2) {
-		writeln("Usage: dbcc <input.dbc>");
-		return;
-	}
+    if (args.length < 2) {
+        writeln("Usage: dbcc <input.dbc>");
+        return;
+    }
 
-	string inputFile = args[1];
+    string inputFile = args[1];
 
     if (!exists(inputFile)) {
         writefln("Error: File '%s' not found.", inputFile);
@@ -21,11 +22,11 @@ void main(string[] args) {
 
     writefln("Successfully parsed %d messages.", db.messages.length);
     
-    foreach (msg; db.messages) {
-        writefln("- Message: %s (ID: %d, DLC: %d bytes)", msg.name, msg.id, msg.dlc);
-        foreach (sig; msg.signals) {
-            writefln("  -> Signal: %s (Start: %d, Length: %d, Unit: %s)", 
-                     sig.name, sig.startBit, sig.length, sig.unit);
-        }
-    }
+    writeln("Generating C++ bindings...");
+    string cppCode = generateCppHeader(db);
+    
+    string outputFile = "generated_can.hpp";
+    std.file.write(outputFile, cppCode);
+    
+    writefln("Done! Wrote C++ headers to %s", outputFile);
 }
