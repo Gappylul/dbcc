@@ -15,8 +15,7 @@ Database parseDbcFile(string filePath) {
     auto boRegex = ctRegex!`BO_\s+(\d+)\s+(\w+):\s+(\d+)\s+(\w+)`;
 
     // Regex for Signal: SG_ EngineSpeed : 24|16@1+ (0.25,0) [0|8000] "rpm" ReceiverNode
-    auto sgRegex = ctRegex!`SG_\s+(\w+)\s*:\s*(\d+)\|(\d+)
-        @([01])([+-])\s*\(([0-9.-]+),([0-9.-]+)\)\s*\[([0-9.-]+)\|([0-9.-]+)\]\s*"([^"]*)"\s*(.*)`;
+    auto sgRegex = ctRegex!`SG_\s+(\w+)\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]+)\|([^\]]+)\]\s*"([^"]*)"\s*(.*)`;
 
     Message* currentMsg = null;
 
@@ -50,6 +49,9 @@ Database parseDbcFile(string filePath) {
                 };
                 currentMsg.signals ~= sig;
             }
+        }
+        else if (line.startsWith("SG_")) {
+            writeln("Warning: Failed to match regex on signal -> ", line);
         }
     }
     return db;
