@@ -1,12 +1,23 @@
 import std.stdio;
 import std.file;
+import std.getopt;
 import dbc.model;
 import dbc.parser;
 import dbc.cpp_gen;
+import dbc.d_gen;
 
 void main(string[] args) {
-    if (args.length < 2) {
-        writeln("Usage: dbcc <input.dbc>");
+    string lang = "cpp";
+    string outputFile = "";
+
+    auto helpInformation = getopt(
+        args,
+        "lang|l", "Target language (cpp, d)", &lang,
+        "out|o", "Output file name", &outputFile
+    );
+
+    if (helpInformation.helpWanted || args.length < 2) {
+        defaultGetoptPrinter("Usage: dbcc [options] <input.dbc>", helpInformation.options);
         return;
     }
 
@@ -19,14 +30,24 @@ void main(string[] args) {
 
     writeln("Parsing ", inputFile, "...");
     Database db = parseDbcFile(inputFile);
-
     writefln("Successfully parsed %d messages.", db.messages.length);
     
-    writeln("Generating C++ bindings...");
-    string cppCode = generateCppHeader(db);
+    if (lang == "cpp") {
+        writeln("Generating C++ bindings...");
+        string cppCode = generateCppHeader(db);
+        if (outputFile == "") outputFile = "generated_can.hpp";
+        std.file.write(outputFile, cppCode);
+    } 
+    else if (lang == "d") {
+        writeln("Generating D bindings...");
+        string dCode = generateDModule(db);
+        if (outputFile == "") outputFile = "can_messages.d";
+        std.file.write(outputFile, dCode);
+    } 
+    else {
+        writefln("Error: Unsupported language '%s'. Use 'cpp' or 'd'.", lang);
+        return;
+    }
     
-    string outputFile = "generated_can.hpp";
-    std.file.write(outputFile, cppCode);
-    
-    writefln("Done! Wrote C++ headers to %s", outputFile);
+    writefln("Done! Wrote code to %s", outputFile);
 }
